@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>판서 보드 (도형 모드 포함)</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #f6f7f9;
+      --panel-border: #e5e7eb;
+      --text: #111827;
+      --accent: #2563eb;
+    }
+    body.dark { --bg:#0f1115; --panel:#161a22; --panel-border:#222733; --text:#e5e7eb; --accent:#60a5fa; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;user-select:none}
+    .app{height:100%;display:flex;flex-direction:column}
+    .toolbar{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;padding:.6rem .8rem;border-bottom:1px solid var(--panel-border);background:var(--panel);position:sticky;top:0;z-index:10}
+    .toolbar .group{display:inline-flex;gap:.4rem;align-items:center}
+    .toolbar label{font-size:.9rem;opacity:.9}
+    .btn{appearance:none;border:1px solid var(--panel-border);background:#fff0;color:var(--text);padding:.45rem .7rem;border-radius:.7rem;cursor:pointer;font-weight:600;font-size:.92rem;transition:transform .06s,background .2s,border-color .2s}
+    .btn:hover{background:#0000000a}
+    .btn:active{transform:translateY(1px)}
+    .btn[disabled]{opacity:.5;cursor:not-allowed}
+    .btn.primary{border-color:var(--accent)}
+    .btn.toggled{background:var(--accent);border-color:var(--accent);color:#fff}
+    input[type="color"]{width:34px;height:34px;border-radius:.6rem;border:1px solid var(--panel-border);padding:0;cursor:pointer;background:#fff0}
+    input[type="range"]{height:6px;accent-color:var(--accent)}
+    select{padding:.42rem .6rem;border-radius:.6rem;border:1px solid var(--panel-border);background:#fff0;color:var(--text)}
+    .swatches{display:inline-flex;gap:.25rem}
+    .swatch{width:26px;height:26px;border-radius:999px;border:2px solid #fff;box-shadow:0 0 0 1px var(--panel-border);background:var(--swatch,#000);cursor:pointer}
+    .stage{flex:1;min-height:0;position:relative}
+    canvas{width:100%;height:calc(100vh - 64px);display:block;touch-action:none;cursor:crosshair;background:transparent}
+    .hint{position:absolute;right:.8rem;bottom:.8rem;font-size:.85rem;opacity:.7;background:#00000011;padding:.3rem .5rem;border-radius:.5rem}
+    .sep{width:1px;height:28px;background:var(--panel-border);margin:0 .2rem}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="toolbar" id="toolbar">
+      <div class="group">
+        <button class="btn toggled" id="penBtn" title="P">펜</button>
+        <button class="btn" id="eraserBtn" title="E">지우개</button>
+        <span class="sep"></span>
+        <button class="btn" id="shapeModeBtn" title="S">도형</button>
+        <select id="shapeSelect" title="도형 선택">
+          <optgroup label="기본">
+            <option value="rect">네모(사각형)</option>
+            <option value="roundRect">둥근 사각형</option>
+            <option value="circle">원</option>
+            <option value="ellipse">타원</option>
+            <option value="line">직선</option>
+            <option value="arrow">화살표</option>
+          </optgroup>
+          <optgroup label="수학/과학">
+            <option value="grid">좌표평면</option>
+            <option value="triangle">직각삼각형</option>
+            <option value="flask">삼각 플라스크</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="group">
+        <label for="color">색상</label>
+        <input type="color" id="color" value="#111111" />
+        <div class="swatches" aria-hidden="true">
+          <button class="swatch" data-color="#111111" style="--swatch:#111111"></button>
+          <button class="swatch" data-color="#ef4444" style="--swatch:#ef4444"></button>
+          <button class="swatch" data-color="#2563eb" style="--swatch:#2563eb"></button>
+          <button class="swatch" data-color="#10b981" style="--swatch:#10b981"></button>
+          <button class="swatch" data-color="#f59e0b" style="--swatch:#f59e0b"></button>
+          <button class="swatch" data-color="#7c3aed" style="--swatch:#7c3aed"></button>
+        </div>
+      </div>
+
+      <div class="group">
+        <label for="size">두께</label>
+        <input type="range" id="size" min="1" max="50" value="6" />
+      </div>
+
+      <div class="group">
+        <button class="btn" id="undoBtn" title="Ctrl/⌘+Z" disabled>실행취소</button>
+        <button class="btn" id="redoBtn" title="Ctrl/⌘+Y" disabled>다시실행</button>
+        <button class="btn" id="clearBtn" title="C">모두지우기</button>
+      </div>
+
+      <div class="group" style="margin-left:auto">
+        <button class="btn" id="bgBtn" title="B">배경 전환</button>
+        <button class="btn" id="fullBtn">전체화면</button>
+        <button class="btn primary" id="saveBtn" title="Ctrl/⌘+S">PNG 저장</button>
+      </div>
+    </div>
+
+    <div class="stage" id="stage">
+      <canvas id="board"></canvas>
+      <div class="hint">단축키: P 펜 · E 지우개 · S 도형 · 드래그로 도형 배치 · Ctrl/⌘+Z 되돌리기 · Ctrl/⌘+Y 다시 · B 배경 · C 모두지우기 · Ctrl/⌘+S 저장</div>
+    </div>
+  </div>
+
+  <script>
+    // ====== 기본 셋업 ======
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const canvas = document.getElementById('board');
+    const stage = document.getElementById('stage');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    const penBtn = document.getElementById('penBtn');
+    const eraserBtn = document.getElementById('eraserBtn');
+    const shapeModeBtn = document.getElementById('shapeModeBtn');
+    const shapeSelect = document.getElementById('shapeSelect');
+    const colorInput = document.getElementById('color');
+    const sizeInput = document.getElementById('size');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const bgBtn = document.getElementById('bgBtn');
+    const fullBtn = document.getElementById('fullBtn');
+    const saveBtn = document.getElementById('saveBtn');
+
+    let isDark = false;
+    let mode = 'pen'; // 'pen' | 'eraser' | 'shape'
+
+    // 히스토리: 자유곡선, 지우개, 도형 공통으로 저장
+    const strokes = []; // item: { kind:'stroke'|'shape', data:{...} }
+    const redoStack = [];
+
+    let drawing = false; // 드래깅 중 여부
+    let current = null;  // 현재 stroke 또는 shape
+    let startPt = null;  // 도형 시작점
+
+    function setMode(next) {
+      mode = next;
+      penBtn.classList.toggle('toggled', mode === 'pen');
+      eraserBtn.classList.toggle('toggled', mode === 'eraser');
+      shapeModeBtn.classList.toggle('toggled', mode === 'shape');
+      canvas.style.cursor = (mode === 'shape') ? 'crosshair' : 'crosshair';
+    }
+
+    function fitCanvas() {
+      const rect = stage.getBoundingClientRect();
+      const width = Math.max(1, Math.floor(rect.width * dpr));
+      const height = Math.max(1, Math.floor(rect.height * dpr));
+      if (canvas.width === width && canvas.height === height) return;
+      canvas.width = width; canvas.height = height;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // CSS px 좌표계
+      redrawAll();
+    }
+
+    function backgroundColor() { return isDark ? '#0f1115' : '#ffffff'; }
+
+    function redrawAll() {
+      ctx.save();
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.restore();
+      for (const s of strokes) {
+        if (s.kind === 'stroke') drawStroke(s.data);
+        else if (s.kind === 'shape') drawShape(s.data);
+      }
+      updateUndoRedoState();
+    }
+
+    // ===== 자유곡선 (펜/지우개) =====
+    function drawStroke(s, isLive) {
+      const { mode: m, color, size, points } = s;
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
+      ctx.globalCompositeOperation = (m === 'eraser') ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = color;
+      function widthAt(p){ return Math.max(0.5, size * (0.6 + 0.8 * (p ?? 0.5))); }
+      if (points.length === 1) {
+        const a = points[0];
+        ctx.beginPath(); ctx.lineWidth = widthAt(a.p);
+        ctx.moveTo(a.x, a.y); ctx.lineTo(a.x + 0.01, a.y + 0.01); ctx.stroke();
+      } else {
+        for (let i=1;i<points.length;i++){
+          const a = points[i-1], b = points[i];
+          ctx.beginPath(); ctx.lineWidth = (widthAt(a.p)+widthAt(b.p))/2;
+          const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+          ctx.moveTo(a.x,a.y); ctx.quadraticCurveTo(a.x,a.y,mx,my); ctx.stroke();
+        }
+      }
+      ctx.restore();
+      if (!isLive) updateUndoRedoState();
+    }
+
+    // ===== 도형 =====
+    function rectFromPoints(a,b){
+      const x = Math.min(a.x,b.x), y = Math.min(a.y,b.y);
+      const w = Math.abs(a.x-b.x), h = Math.abs(a.y-b.y);
+      return {x,y,w,h};
+    }
+
+    function drawRoundRectPath(x,y,w,h,r){
+      const rr = Math.min(r, w/2, h/2);
+      ctx.beginPath();
+      ctx.moveTo(x+rr,y);
+      ctx.arcTo(x+w,y,x+w,y+h,rr);
+      ctx.arcTo(x+w,y+h,x,y+h,rr);
+      ctx.arcTo(x,y+h,x,y,rr);
+      ctx.arcTo(x,y,x+w,y,rr);
+      ctx.closePath();
+    }
+
+    function drawArrow(x1,y1,x2,y2, lw){
+      // 선
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      // 화살촉
+      const ang = Math.atan2(y2-y1, x2-x1);
+      const len = Math.max(8, lw*3);
+      const a1 = ang + Math.PI*0.85, a2 = ang - Math.PI*0.85;
+      ctx.beginPath();
+      ctx.moveTo(x2,y2);
+      ctx.lineTo(x2 - Math.cos(a1)*len, y2 - Math.sin(a1)*len);
+      ctx.moveTo(x2,y2);
+      ctx.lineTo(x2 - Math.cos(a2)*len, y2 - Math.sin(a2)*len);
+      ctx.stroke();
+    }
+
+    function drawGrid(x,y,w,h, color, lw){
+      ctx.save();
+      ctx.strokeStyle = color; ctx.lineWidth = lw*0.6; ctx.globalAlpha = 0.9;
+      // 기준 스텝을 40px 근처로 맞춤
+      const target = 40;
+      const step = Math.max(20, Math.round(Math.min(w,h)/Math.max(6, Math.min(20, Math.min(w,h)/target))));
+      // 테두리
+      ctx.strokeRect(x,y,w,h);
+      // 그리드
+      for(let gx = Math.ceil(x/step)*step; gx < x+w; gx += step){ ctx.beginPath(); ctx.moveTo(gx,y); ctx.lineTo(gx,y+h); ctx.stroke(); }
+      for(let gy = Math.ceil(y/step)*step; gy < y+h; gy += step){ ctx.beginPath(); ctx.moveTo(x,gy); ctx.lineTo(x+w,gy); ctx.stroke(); }
+      // 축(가운데)
+      ctx.lineWidth = lw; ctx.globalAlpha = 1;
+      const cx = x + w/2, cy = y + h/2;
+      // x축
+      drawArrow(x, cy, x+w, cy, lw);
+      // y축
+      drawArrow(cx, y+h, cx, y, lw);
+      // 눈금
+      ctx.lineWidth = Math.max(1, lw*0.8);
+      const tick = Math.max(4, lw*2);
+      for(let gx = cx + step; gx < x+w; gx += step){ ctx.beginPath(); ctx.moveTo(gx, cy-tick); ctx.lineTo(gx, cy+tick); ctx.stroke(); }
+      for(let gx = cx - step; gx > x; gx -= step){ ctx.beginPath(); ctx.moveTo(gx, cy-tick); ctx.lineTo(gx, cy+tick); ctx.stroke(); }
+      for(let gy = cy + step; gy < y+h; gy += step){ ctx.beginPath(); ctx.moveTo(cx-tick, gy); ctx.lineTo(cx+tick, gy); ctx.stroke(); }
+      for(let gy = cy - step; gy > y; gy -= step){ ctx.beginPath(); ctx.moveTo(cx-tick, gy); ctx.lineTo(cx+tick, gy); ctx.stroke(); }
+      ctx.restore();
+    }
+
+    function drawTriangleRight(x,y,w,h){
+      ctx.beginPath();
+      ctx.moveTo(x,y+h);
+      ctx.lineTo(x,y);
+      ctx.lineTo(x+w,y+h);
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    function drawFlask(x,y,w,h){
+      // 삼각 플라스크(Erlenmeyer): 목(neck) + 어깨(shoulder) + 몸체
+      ctx.save();
+      ctx.beginPath();
+      const nx = x + w*0.45, nx2 = x + w*0.55; // 목 너비
+      const top = y + h*0.05, neckH = h*0.18;
+      // 목
+      ctx.moveTo(nx, top);
+      ctx.lineTo(nx, top + neckH);
+      ctx.moveTo(nx2, top);
+      ctx.lineTo(nx2, top + neckH);
+      // 어깨 곡선 -> 몸체 바닥
+      const shoulderY = top + neckH;
+      const leftBaseX = x + w*0.12, rightBaseX = x + w*0.88;
+      const baseY = y + h*0.92;
+      // 왼쪽 어깨/몸체
+      ctx.moveTo(nx, shoulderY);
+      ctx.bezierCurveTo(x + w*0.36, shoulderY + h*0.06, x + w*0.22, shoulderY + h*0.25, leftBaseX, baseY);
+      // 바닥
+      ctx.lineTo(rightBaseX, baseY);
+      // 오른쪽 몸체/어깨
+      ctx.bezierCurveTo(x + w*0.78, shoulderY + h*0.25, x + w*0.64, shoulderY + h*0.06, nx2, shoulderY);
+      ctx.stroke();
+      // 눈금선 간단 표현
+      const lw = ctx.lineWidth;
+      const tickGap = Math.max(8, Math.min(20, h*0.05));
+      for(let ty = baseY - tickGap; ty > shoulderY + tickGap; ty -= tickGap){
+        const tL = x + w*0.26; const tR = x + w*0.42;
+        ctx.beginPath(); ctx.moveTo(tL, ty); ctx.lineTo(tR, ty); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawShape(s, preview=false){
+      const { shape, x, y, w, h, color, size } = s;
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = color; ctx.lineWidth = size;
+      if (preview) { ctx.setLineDash([6,6]); }
+      switch(shape){
+        case 'rect':
+          ctx.strokeRect(x,y,w,h); break;
+        case 'roundRect':
+          drawRoundRectPath(x,y,w,h, Math.min(18, Math.min(w,h)/6)); ctx.stroke(); break;
+        case 'circle': {
+          const r = Math.min(Math.abs(w), Math.abs(h))/2; const cx = x + (w>=0? r: -r), cy = y + (h>=0? r: -r);
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke(); break; }
+        case 'ellipse':
+          ctx.beginPath(); ctx.ellipse(x + w/2, y + h/2, Math.abs(w/2), Math.abs(h/2), 0, 0, Math.PI*2); ctx.stroke(); break;
+        case 'line':
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x+w, y+h); ctx.stroke(); break;
+        case 'arrow':
+          drawArrow(x, y, x+w, y+h, size); break;
+        case 'grid':
+          drawGrid(x,y,Math.abs(w),Math.abs(h), color, size); break;
+        case 'triangle':
+          drawTriangleRight(x,y, w, h); break;
+        case 'flask':
+          drawFlask(Math.min(x,x+w), Math.min(y,y+h), Math.abs(w), Math.abs(h)); break;
+      }
+      ctx.restore();
+    }
+
+    function updateUndoRedoState(){
+      undoBtn.disabled = strokes.length === 0;
+      redoBtn.disabled = redoStack.length === 0;
+    }
+
+    function getPos(e){
+      const r = canvas.getBoundingClientRect();
+      const x = e.clientX - r.left; const y = e.clientY - r.top;
+      let p = e.pressure; if (p === 0 || p === undefined) p = (e.pointerType === 'pen') ? 0.5 : 0.5;
+      return { x, y, p };
+    }
+
+    function pointerDown(e){
+      e.preventDefault(); canvas.setPointerCapture(e.pointerId); drawing = true; redoStack.length = 0;
+      const pos = getPos(e);
+      if (mode === 'shape'){
+        startPt = pos; current = { kind:'shape', data:{ shape: shapeSelect.value, x: pos.x, y: pos.y, w: 0, h: 0, color: colorInput.value, size: parseFloat(sizeInput.value) } };
+      } else {
+        current = { kind:'stroke', data:{ mode, color: (mode==='pen')? colorInput.value : '#000', size: parseFloat(sizeInput.value), points: [pos] } };
+        drawStroke(current.data, true);
+      }
+    }
+
+    function pointerMove(e){
+      if (!drawing || !current) return; const pos = getPos(e);
+      if (current.kind === 'shape'){
+        const d = current.data; d.w = pos.x - d.x; d.h = pos.y - d.y;
+        redrawAll(); // 기존 그리기 후 미리보기
+        drawShape({ ...d }, true);
+      } else {
+        current.data.points.push(pos); drawStroke(current.data, true);
+      }
+    }
+
+    function pointerUp(e){
+      if (!drawing) return; drawing = false;
+      if (current){
+        if (current.kind === 'shape'){
+          const d = current.data;
+          // 정규화: x,y는 좌상단, w,h는 양수
+          const rx = Math.min(d.x, d.x + d.w); const ry = Math.min(d.y, d.y + d.h);
+          const rw = Math.abs(d.w); const rh = Math.abs(d.h);
+          current.data = { ...d, x: rx, y: ry, w: rw, h: rh };
+          strokes.push(current);
+          redrawAll();
+        } else {
+          strokes.push(current);
+          redrawAll();
+        }
+        current = null; startPt = null;
+      }
+    }
+
+    function undo(){ if (strokes.length){ redoStack.push(strokes.pop()); redrawAll(); } }
+    function redo(){ if (redoStack.length){ strokes.push(redoStack.pop()); redrawAll(); } }
+    function clearAll(){ strokes.length = 0; redoStack.length = 0; redrawAll(); }
+    function toggleBg(){ isDark = !isDark; document.body.classList.toggle('dark', isDark); redrawAll(); }
+
+    function savePNG(){
+      const out = document.createElement('canvas'); out.width = canvas.width; out.height = canvas.height; const octx = out.getContext('2d');
+      octx.fillStyle = backgroundColor(); octx.fillRect(0,0,out.width,out.height); octx.drawImage(canvas, 0, 0);
+      const url = out.toDataURL('image/png'); const a = document.createElement('a'); a.href = url; const ts = new Date().toISOString().replace(/[:.]/g,'-'); a.download = `board-${ts}.png`; a.click();
+    }
+    function toggleFullscreen(){ const el = document.documentElement; if (!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.(); }
+
+    // ===== 이벤트 바인딩 =====
+    window.addEventListener('resize', fitCanvas);
+    canvas.addEventListener('pointerdown', pointerDown);
+    canvas.addEventListener('pointermove', pointerMove);
+    canvas.addEventListener('pointerup', pointerUp);
+    canvas.addEventListener('pointercancel', pointerUp);
+    canvas.addEventListener('contextmenu', e=> e.preventDefault());
+
+    penBtn.addEventListener('click', ()=> setMode('pen'));
+    eraserBtn.addEventListener('click', ()=> setMode('eraser'));
+    shapeModeBtn.addEventListener('click', ()=> setMode(mode==='shape' ? 'pen' : 'shape'));
+
+    undoBtn.addEventListener('click', undo);
+    redoBtn.addEventListener('click', redo);
+    clearBtn.addEventListener('click', clearAll);
+    bgBtn.addEventListener('click', toggleBg);
+    saveBtn.addEventListener('click', savePNG);
+    fullBtn.addEventListener('click', toggleFullscreen);
+
+    document.querySelectorAll('.swatch').forEach(el=>{
+      el.addEventListener('click', ()=>{ const c = el.getAttribute('data-color'); colorInput.value = c; if(mode!=='eraser') setMode('pen'); });
+    });
+
+    // 단축키
+    document.addEventListener('keydown', (e)=>{
+      if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) return;
+      const k = e.key.toLowerCase();
+      if ((e.ctrlKey||e.metaKey) && k==='z'){ e.preventDefault(); undo(); }
+      else if ((e.ctrlKey||e.metaKey) && (k==='y' || (k==='z' && e.shiftKey))){ e.preventDefault(); redo(); }
+      else if ((e.ctrlKey||e.metaKey) && k==='s'){ e.preventDefault(); savePNG(); }
+      else if (k==='e'){ setMode('eraser'); }
+      else if (k==='p'){ setMode('pen'); }
+      else if (k==='s'){ setMode('shape'); }
+      else if (k==='b'){ toggleBg(); }
+      else if (k==='c'){ clearAll(); }
+      else if (k==='+'){ sizeInput.value = Math.min(50, parseInt(sizeInput.value) + 1); }
+      else if (k==='-'){ sizeInput.value = Math.max(1, parseInt(sizeInput.value) - 1); }
+    });
+
+    // 초기화
+    fitCanvas();
+  </script>
+</body>
+</html>
